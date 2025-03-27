@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Briefcase, Plus } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import type { Case } from '../types';
 
 export default function Cases() {
@@ -17,50 +17,37 @@ export default function Cases() {
   }, [user?.sub]);
 
   async function loadCases() {
-    if (!user?.sub || !user?.email) return;
+    if (!user?.sub) return;
     
-    const { data, error } = await supabase
-      .from('cases')
-      .select('*')
-      .or(`user_id.eq.${user.email},user_id.eq.${user.sub}`)
-      .order('created_at', { ascending: false });
-      
-    if (error) {
+    try {
+      const data = await api.getCases(user.sub);
+      setCases(data);
+    } catch (error) {
       console.error('Error loading cases:', error);
       setError('Failed to load cases. Please try again.');
-      return;
     }
-    
-    setCases(data);
   }
 
   async function createCase(e: React.FormEvent) {
     e.preventDefault();
-    if (!user?.sub || !user?.email) return;
+    if (!user?.sub) return;
 
     setError(null);
 
-    const { data, error: insertError } = await supabase
-      .from('cases')
-      .insert([
-        {
-          title: newCase.title,
-          description: newCase.description,
-          user_id: user.email // Use email as the user_id
-        }
-      ])
-      .select()
-      .single();
+    try {
+      const data = await api.createCase({
+        title: newCase.title,
+        description: newCase.description,
+        user_id: user.sub
+      });
 
-    if (insertError) {
-      console.error('Error creating case:', insertError);
+      setCases(prev => [data, ...prev]);
+      setIsCreating(false);
+      setNewCase({ title: '', description: '' });
+    } catch (error) {
+      console.error('Error creating case:', error);
       setError('Failed to create case. Please try again.');
-      return;
     }
-
-    setCases(prev => [data, ...prev]);
-    setIsCreating(false);
-    setNewCase({ title: '', description: '' });
   }
 
   return (

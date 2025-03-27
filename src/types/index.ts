@@ -10,8 +10,8 @@ export interface Document {
   id: string;
   case_id: string;
   name: string;
-  url: string;
   type: 'pdf' | 'doc' | 'docx' | 'txt';
+  content?: Buffer;
   created_at: string;
 }
 
@@ -20,7 +20,7 @@ export interface Deposition {
   case_id: string;
   witness_name: string;
   date: string;
-  transcript: string;
+  transcript?: string;
   analysis?: DepositionAnalysis;
   created_at: string;
 }

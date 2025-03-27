@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { FileText, Plus, Upload, Trash2, Search } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import type { Case, Document, Deposition } from '../types';
 
 function sanitizeString(fileName: string): string {
@@ -44,45 +44,20 @@ export default function CaseDetail() {
   async function loadCaseData() {
     if (!caseId || !user?.sub) return;
 
-    const { data: caseData, error: caseError } = await supabase
-      .from('cases')
-      .select('*')
-      .eq('id', caseId)
-      .single();
+    try {
+      const [caseData, documents, depositions] = await Promise.all([
+        api.getCase(caseId),
+        api.getDocuments(caseId),
+        api.getDepositions(caseId)
+      ]);
 
-    if (caseError) {
-      console.error('Error loading case:', caseError);
+      if (caseData) setCaseData(caseData);
+      if (documents) setDocuments(documents);
+      if (depositions) setDepositions(depositions);
+    } catch (error) {
+      console.error('Error loading case data:', error);
       setError('Failed to load case data');
-      return;
     }
-
-    const { data: documents, error: docsError } = await supabase
-      .from('documents')
-      .select('*')
-      .eq('case_id', caseId)
-      .order('created_at', { ascending: false });
-
-    if (docsError) {
-      console.error('Error loading documents:', docsError);
-      setError('Failed to load documents');
-      return;
-    }
-
-    const { data: depositions, error: depoError } = await supabase
-      .from('depositions')
-      .select('*')
-      .eq('case_id', caseId)
-      .order('date', { ascending: false });
-
-    if (depoError) {
-      console.error('Error loading depositions:', depoError);
-      setError('Failed to load depositions');
-      return;
-    }
-
-    if (caseData) setCaseData(caseData);
-    if (documents) setDocuments(documents);
-    if (depositions) setDepositions(depositions);
   }
 
   async function handleFileUpload(acceptedFiles: File[]) {
@@ -91,107 +66,54 @@ export default function CaseDetail() {
     setIsUploadingDoc(true);
     
     for (const file of acceptedFiles) {
-      const fileExt = file.name.split('.').pop()?.toLowerCase();
-      const sanitizedName = sanitizeString(file.name);
-      const cleanName = sanitizeString(user.sub);
-      const uniquePrefix = Math.random().toString(36).slice(2, 10);
-      const filePath = `${cleanName}/${caseId}/${uniquePrefix}_${sanitizedName}`;
-
       try {
-        const { error: uploadError } = await supabase.storage
-          .from('case-documents')
-          .upload(filePath, file, {
-            cacheControl: '3600',
-            upsert: false
-          });
-
-        if (uploadError) {
-          console.error('Error uploading file:', uploadError);
-          setError(`Failed to upload ${file.name}: ${uploadError.message}`);
-          continue;
-        }
-
-        const { data: { signedUrl } } = await supabase.storage
-          .from('case-documents')
-          .createSignedUrl(filePath, 31536000);
-
-        if (!signedUrl) {
-          console.error('Failed to create signed URL');
-          setError(`Failed to create download link for ${file.name}`);
-          continue;
-        }
-
-        const { error: dbError } = await supabase
-          .from('documents')
-          .insert([
-            {
-              case_id: caseId,
-              name: file.name,
-              url: signedUrl,
-              type: fileExt
-            }
-          ]);
-
-        if (dbError) {
-          console.error('Error saving document:', dbError);
-          setError(`Failed to save ${file.name} to database: ${dbError.message}`);
-          
-          await supabase.storage
-            .from('case-documents')
-            .remove([filePath]);
-        }
+        const newDocument = await api.uploadDocument(file, caseId);
+        setDocuments(prev => [newDocument, ...prev]);
       } catch (error) {
-        console.error('Unexpected error:', error);
-        setError(`Unexpected error uploading ${file.name}`);
+        console.error('Error uploading document:', error);
+        setError(`Failed to upload ${file.name}`);
       }
     }
 
     setIsUploadingDoc(false);
-    loadCaseData();
   }
 
   async function handleDeleteDocument(documentId: string) {
     if (!caseId || !user?.sub) return;
     setError(null);
 
-    const documentToDelete = documents.find(doc => doc.id === documentId);
-    if (!documentToDelete) return;
-
-    // Extract the file path from the URL
-    const urlParts = documentToDelete.url.split('/');
-    const filePath = urlParts[urlParts.length - 1];
-
     try {
-      // Delete from storage
-      const { error: storageError } = await supabase.storage
-        .from('case-documents')
-        .remove([`${user.sub}/${caseId}/${filePath}`]);
-
-      if (storageError) {
-        console.error('Error deleting file from storage:', storageError);
-        setError('Failed to delete file from storage');
-        return;
-      }
-
-      // Delete from database
-      const { error: dbError } = await supabase
-        .from('documents')
-        .delete()
-        .eq('id', documentId);
-
-      if (dbError) {
-        console.error('Error deleting document from database:', dbError);
-        setError('Failed to delete document record');
-        return;
-      }
-
+      await api.deleteDocument(documentId);
       setDocuments(documents.filter(doc => doc.id !== documentId));
     } catch (error) {
-      console.error('Unexpected error deleting document:', error);
-      setError('An unexpected error occurred while deleting the document');
+      console.error('Error deleting document:', error);
+      setError('Failed to delete document');
     }
 
     setDeleteConfirm(null);
+  }
+
+  async function handleDownloadDocument(documentId: string) {
+    try {
+      console.log('Starting document download:', documentId);
+      const blob = await api.downloadDocument(documentId);
+      console.log('Downloaded blob:', {
+        size: blob.size,
+        type: blob.type
+      });
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = documents.find(doc => doc.id === documentId)?.name || 'document';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      setError('Failed to download document');
+    }
   }
 
   async function handleDeleteDeposition(depositionId: string) {
@@ -199,21 +121,11 @@ export default function CaseDetail() {
     setError(null);
 
     try {
-      const { error: dbError } = await supabase
-        .from('depositions')
-        .delete()
-        .eq('id', depositionId);
-
-      if (dbError) {
-        console.error('Error deleting deposition:', dbError);
-        setError('Failed to delete deposition');
-        return;
-      }
-
+      await api.deleteDeposition(depositionId);
       setDepositions(depositions.filter(depo => depo.id !== depositionId));
     } catch (error) {
-      console.error('Unexpected error deleting deposition:', error);
-      setError('An unexpected error occurred while deleting the deposition');
+      console.error('Error deleting deposition:', error);
+      setError('Failed to delete deposition');
     }
 
     setDeleteConfirm(null);
@@ -224,28 +136,25 @@ export default function CaseDetail() {
     if (!caseId || !user?.sub) return;
 
     setError(null);
-    const { error: depoError } = await supabase
-      .from('depositions')
-      .insert([
-        {
-          case_id: caseId,
-          witness_name: newDeposition.witness_name,
-          date: newDeposition.date
-        }
-      ]);
+    try {
+      const depositionData = {
+        case_id: caseId,
+        witness_name: newDeposition.witness_name,
+        date: newDeposition.date,
+        transcript: '' // Initialize with empty transcript
+      };
+      const createdDeposition = await api.createDeposition(depositionData);
 
-    if (depoError) {
-      console.error('Error creating deposition:', depoError);
+      setDepositions(prev => [createdDeposition, ...prev]);
+      setIsCreatingDepo(false);
+      setNewDeposition({
+        witness_name: '',
+        date: new Date().toISOString().split('T')[0]
+      });
+    } catch (error) {
+      console.error('Error creating deposition:', error);
       setError('Failed to create deposition');
-      return;
     }
-
-    setIsCreatingDepo(false);
-    setNewDeposition({
-      witness_name: '',
-      date: new Date().toISOString().split('T')[0]
-    });
-    loadCaseData();
   }
 
   if (!caseData) return null;
@@ -303,33 +212,27 @@ export default function CaseDetail() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="space-y-4">
           {documents.map(doc => (
-            <div
-              key={doc.id}
-              className="flex items-start space-x-3 p-4 bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow"
-            >
-              <FileText className="h-6 w-6 text-indigo-600 flex-shrink-0" />
-              <div className="flex-grow">
-                <a
-                  href={doc.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-gray-900 hover:text-indigo-600"
-                >
-                  {doc.name}
-                </a>
-                <p className="text-sm text-gray-500">
-                  Added {new Date(doc.created_at).toLocaleDateString()}
-                </p>
+            <div key={doc.id} className="flex items-center justify-between p-4 bg-white rounded-lg shadow">
+              <div className="flex items-center">
+                <FileText className="h-6 w-6 text-gray-400 mr-3" />
+                <span className="text-gray-900">{doc.name}</span>
               </div>
-              <button
-                onClick={() => setDeleteConfirm({ type: 'document', id: doc.id })}
-                className="text-gray-400 hover:text-red-600 transition-colors"
-                title="Delete document"
-              >
-                <Trash2 className="h-5 w-5" />
-              </button>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => handleDownloadDocument(doc.id)}
+                  className="text-indigo-600 hover:text-indigo-900"
+                >
+                  Download
+                </button>
+                <button
+                  onClick={() => setDeleteConfirm({ type: 'document', id: doc.id })}
+                  className="text-red-600 hover:text-red-900"
+                >
+                  <Trash2 className="h-5 w-5" />
+                </button>
+              </div>
             </div>
           ))}
         </div>

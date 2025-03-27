@@ -1,3 +1,4 @@
+import type { Document } from '../types';
 import OpenAI from 'openai';
 
 const openai = new OpenAI({
@@ -56,61 +57,87 @@ Begin your response with a single { character, and then produce a complete JSON 
 }
 
 export async function analyzeDocuments(documents: { content: string; name: string }[], goals: string) {
-  const systemPrompt = `You are an expert legal analyst. Analyze the provided documents in the context of the specified goals to:
-1. Identify key evidence that supports or contradicts the goals
-2. Suggest lines of inquiry for depositions
-3. Highlight potential weaknesses or areas needing further investigation
+  const prompt = `Please analyze the following documents with these goals in mind: ${goals}
+
+Documents:
+${documents.map(doc => `${doc.name}:\n${doc.content}\n`).join('\n')}
+
+Please provide:
+1. Key evidence and important points from each document
+2. Suggested lines of inquiry or questions to explore
+3. Potential weaknesses or areas that need clarification
+
 Format your response as JSON with the following structure:
 {
-  "key_evidence": [
-    {
-      "document": "...",
-      "excerpt": "...",
-      "relevance": "...",
-      "supports_goals": boolean
-    }
-  ],
-  "suggested_inquiries": [
-    {
-      "topic": "...",
-      "rationale": "...",
-      "specific_questions": ["..."]
-    }
-  ],
-  "potential_weaknesses": [
-    {
-      "issue": "...",
-      "explanation": "...",
-      "mitigation_strategy": "..."
-    }
-  ]
+  "goals": "Brief summary of analysis goals",
+  "key_evidence": [{"point": "...", "importance": "..."}],
+  "suggested_inquiries": [{"topic": "...", "questions": ["..."]}],
+  "potential_weaknesses": [{"issue": "...", "impact": "..."}]
 }`;
 
-  const documentsContext = documents
-    .map(doc => `Document: ${doc.name}\nContent: ${doc.content}`)
-    .join('\n\n');
-
   const response = await openai.chat.completions.create({
-    model: 'gpt-4o',
+    model: "gpt-4-turbo-preview",
     messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: `Goals:\n${goals}\n\nDocuments:\n${documentsContext}` }
-    ]
+      { role: "system", content: "You are a legal document analysis assistant." },
+      { role: "user", content: prompt }
+    ],
+    response_format: { type: "json_object" }
   });
 
-  try {
-    var response_string = response.choices[0].message.content;
-    if (response_string.startsWith("```json\n")) {
-      response_string = response_string.replace("```json\n","");
-      response_string = response_string.replace("```","");
-    }
-    return JSON.parse(response_string || '{}');
-  } catch (error) {
-    console.error('Error parsing OpenAI response:', error);
-    return {
-      key_evidence: [],
-      suggested_inquiries: [],
-      potential_weaknesses: []
-    };
+  const responseContent = response.choices[0].message.content;
+  if (!responseContent) {
+    throw new Error('No response content from OpenAI');
   }
+
+  return JSON.parse(responseContent);
+}
+
+export async function analyzeDocument(document: Document) {
+  const documentContent = await downloadDocumentContent(document.url);
+  
+  const prompt = `Please analyze the following document: ${document.name}
+  
+Content:
+${documentContent}
+
+Please provide:
+1. Key evidence and important points
+2. Suggested lines of inquiry or questions to explore
+3. Potential weaknesses or areas that need clarification
+
+Format your response as JSON with the following structure:
+{
+  "goals": "Brief summary of document goals",
+  "key_evidence": [{"point": "...", "importance": "..."}],
+  "suggested_inquiries": [{"topic": "...", "questions": ["..."]}],
+  "potential_weaknesses": [{"issue": "...", "impact": "..."}]
+}`;
+
+  const response = await openai.chat.completions.create({
+    model: "gpt-4-turbo-preview",
+    messages: [
+      { role: "system", content: "You are a legal document analysis assistant." },
+      { role: "user", content: prompt }
+    ],
+    response_format: { type: "json_object" }
+  });
+
+  const responseContent = response.choices[0].message.content;
+  if (!responseContent) {
+    throw new Error('No response content from OpenAI');
+  }
+
+  return JSON.parse(responseContent);
+}
+
+async function downloadDocumentContent(url: string): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to download document: ${response.statusText}`);
+  }
+  const text = await response.text();
+  if (!text) {
+    throw new Error('Document content is empty');
+  }
+  return text;
 }

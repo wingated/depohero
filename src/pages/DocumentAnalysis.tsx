@@ -2,36 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { ChevronLeft, FileText, Loader, History, AlertTriangle, Lightbulb, CheckCircle, XCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { analyzeDocuments } from '../lib/openai';
-import type { Case, Document } from '../types';
+import { analyzeDocument } from '../lib/openai';
+import type { Case, Document, DocumentAnalysis as DocumentAnalysisType } from '../types';
+import { api } from '../lib/api';
 
 export default function DocumentAnalysis() {
-  const { caseId } = useParams<{ caseId: string }>();
+  const { caseId, documentId } = useParams<{ caseId: string; documentId: string }>();
   const { user } = useAuth0();
   const [caseData, setCaseData] = useState<Case | null>(null);
-  const [documents, setDocuments] = useState<Document[]>([]);
+  const [documentData, setDocumentData] = useState<Document | null>(null);
   const [goals, setGoals] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [analysis, setAnalysis] = useState<{
-    key_evidence: Array<{
-      document: string;
-      excerpt: string;
-      relevance: string;
-      supports_goals: boolean;
-    }>;
-    suggested_inquiries: Array<{
-      topic: string;
-      rationale: string;
-      specific_questions: string[];
-    }>;
-    potential_weaknesses: Array<{
-      issue: string;
-      explanation: string;
-      mitigation_strategy: string;
-    }>;
-  } | null>(null);
+  const [analysisData, setAnalysisData] = useState<DocumentAnalysisType | null>(null);
   const [previousAnalyses, setPreviousAnalyses] = useState<Array<{
     id: string;
     goals: string;
@@ -40,80 +23,70 @@ export default function DocumentAnalysis() {
   const [selectedAnalysisId, setSelectedAnalysisId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (caseId) {
-      loadCaseData();
-      loadPreviousAnalyses();
-    }
-  }, [caseId]);
+    const loadData = async () => {
+      try {
+        // Load case data
+        const caseData = await api.getCase(caseId);
+        if (!caseData) {
+          setError('Failed to load case data');
+          return;
+        }
+        setCaseData(caseData);
 
-  async function loadCaseData() {
-    if (!caseId || !user?.sub) return;
+        // Load document data
+        const docData = await api.getDocument(documentId);
+        if (!docData) {
+          setError('Failed to load document data');
+          return;
+        }
+        setDocumentData(docData);
 
-    const { data: caseData, error: caseError } = await supabase
-      .from('cases')
-      .select('*')
-      .eq('id', caseId)
-      .single();
+        // Load analysis if it exists
+        const analysisData = await api.getDocumentAnalysis(documentId);
+        if (analysisData) {
+          setAnalysisData(analysisData);
+        }
+      } catch (err) {
+        console.error('Error loading data:', err);
+        setError('Failed to load data');
+      }
+    };
 
-    if (caseError) {
-      console.error('Error loading case:', caseError);
-      setError('Failed to load case data');
-      return;
-    }
-
-    const { data: documents, error: docsError } = await supabase
-      .from('documents')
-      .select('*')
-      .eq('case_id', caseId)
-      .order('created_at', { ascending: false });
-
-    if (docsError) {
-      console.error('Error loading documents:', docsError);
-      setError('Failed to load documents');
-      return;
-    }
-
-    if (caseData) setCaseData(caseData);
-    if (documents) setDocuments(documents);
-  }
+    loadData();
+  }, [caseId, documentId]);
 
   async function loadPreviousAnalyses() {
     if (!caseId) return;
 
-    const { data, error } = await supabase
-      .from('document_analyses')
-      .select('id, goals, created_at')
-      .eq('case_id', caseId)
-      .order('created_at', { ascending: false });
-
-    if (error) {
+    try {
+      const analyses = await api.getDocumentAnalyses(caseId);
+      setPreviousAnalyses(analyses.map(a => ({
+        id: a.id,
+        goals: a.goals,
+        created_at: a.created_at
+      })));
+    } catch (error) {
       console.error('Error loading previous analyses:', error);
-      return;
     }
-
-    setPreviousAnalyses(data || []);
   }
 
   async function loadAnalysis(analysisId: string) {
-    const { data, error } = await supabase
-      .from('document_analyses')
-      .select('*')
-      .eq('id', analysisId)
-      .single();
+    try {
+      // Get all analyses and find the one we want
+      const analyses = await api.getDocumentAnalyses(caseId!);
+      const analysis = analyses.find(a => a.id === analysisId);
+      if (!analysis) {
+        setError('Failed to load analysis');
+        return;
+      }
 
-    if (error) {
+      setAnalysisData(analysis);
+      setGoals(analysis.goals);
+      setSelectedAnalysisId(analysisId);
+    } catch (error) {
       console.error('Error loading analysis:', error);
       setError('Failed to load analysis');
-      return;
     }
-
-    setAnalysis({
-      key_evidence: data.key_evidence,
-      suggested_inquiries: data.suggested_inquiries,
-      potential_weaknesses: data.potential_weaknesses
-    });
-    setGoals(data.goals);
-    setSelectedAnalysisId(analysisId);
   }
 
   async function downloadDocumentContent(url: string): Promise<string> {
@@ -145,66 +118,33 @@ export default function DocumentAnalysis() {
     }
   }
 
-  async function handleAnalyze() {
-    if (!documents.length) {
-      setError('Please add documents to analyze');
-      return;
-    }
-
-    if (!goals.trim()) {
-      setError('Please enter your goals for the analysis');
-      return;
-    }
+  const handleAnalyze = async () => {
+    if (!documentData) return;
 
     setIsAnalyzing(true);
     setError(null);
 
     try {
-      const docsWithContent = await Promise.all(
-        documents.map(async (doc) => {
-          try {
-            const content = await downloadDocumentContent(doc.url);
-            return {
-              content,
-              name: doc.name
-            };
-          } catch (error) {
-            console.error(`Error processing document ${doc.name}:`, error);
-            return {
-              content: `Error loading content for ${doc.name}`,
-              name: doc.name
-            };
-          }
-        })
-      );
+      const analysisResult = await analyzeDocument(documentData);
 
-      const analysisResult = await analyzeDocuments(docsWithContent, goals);
-      setAnalysis(analysisResult);
+      // Create a new document analysis
+      const newAnalysis = await api.createDocumentAnalysis({
+        document_id: documentId,
+        case_id: caseId,
+        goals: analysisResult.goals,
+        key_evidence: analysisResult.key_evidence,
+        suggested_inquiries: analysisResult.suggested_inquiries,
+        potential_weaknesses: analysisResult.potential_weaknesses
+      });
 
-      // Store the analysis results
-      const { error: insertError } = await supabase
-        .from('document_analyses')
-        .insert([{
-          case_id: caseId,
-          goals,
-          key_evidence: analysisResult.key_evidence,
-          suggested_inquiries: analysisResult.suggested_inquiries,
-          potential_weaknesses: analysisResult.potential_weaknesses
-        }]);
-
-      if (insertError) {
-        console.error('Error saving analysis:', insertError);
-        setError('Analysis completed but failed to save results');
-      } else {
-        loadPreviousAnalyses(); // Refresh the list of analyses
-      }
-    } catch (error) {
-      console.error('Error analyzing documents:', error);
-      setError('Failed to analyze documents');
+      setAnalysisData(newAnalysis);
+    } catch (err) {
+      console.error('Error analyzing document:', err);
+      setError('Failed to analyze document');
     } finally {
       setIsAnalyzing(false);
     }
-  }
+  };
 
   if (!caseData) return null;
 
@@ -232,27 +172,26 @@ export default function DocumentAnalysis() {
           <div className="space-y-4">
             <h2 className="text-xl font-semibold text-gray-900">Available Documents</h2>
             <div className="space-y-3">
-              {documents.map(doc => (
+              {documentData && (
                 <div
-                  key={doc.id}
                   className="flex items-start space-x-3 p-4 bg-white rounded-lg shadow-sm"
                 >
                   <FileText className="h-6 w-6 text-indigo-600 flex-shrink-0" />
                   <div>
                     <a
-                      href={doc.url}
+                      href={documentData.url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="font-medium text-gray-900 hover:text-indigo-600"
                     >
-                      {doc.name}
+                      {documentData.name}
                     </a>
                     <p className="text-sm text-gray-500">
-                      Added {new Date(doc.created_at).toLocaleDateString()}
+                      Added {new Date(documentData.created_at).toLocaleDateString()}
                     </p>
                   </div>
                 </div>
-              ))}
+              )}
             </div>
           </div>
 
@@ -295,16 +234,16 @@ export default function DocumentAnalysis() {
             </div>
             <button
               onClick={handleAnalyze}
-              disabled={isAnalyzing || !documents.length || !goals.trim()}
+              disabled={isAnalyzing || !documentData || !goals.trim()}
               className="w-full px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
             >
               {isAnalyzing ? (
                 <>
                   <Loader className="animate-spin h-5 w-5 mr-2" />
-                  Analyzing Documents...
+                  Analyzing Document...
                 </>
               ) : (
-                'Analyze Documents'
+                'Analyze Document'
               )}
             </button>
           </div>
@@ -312,7 +251,7 @@ export default function DocumentAnalysis() {
 
         {/* Analysis Results section */}
         <div className="space-y-6">
-          {analysis && (
+          {analysisData && (
             <>
               {/* Key Evidence */}
               <div className="space-y-4">
@@ -321,7 +260,7 @@ export default function DocumentAnalysis() {
                   Key Evidence
                 </h2>
                 <div className="space-y-4">
-                  {analysis.key_evidence.map((evidence, index) => (
+                  {analysisData.key_evidence.map((evidence, index) => (
                     <div key={index} className="bg-white p-4 rounded-lg shadow-sm">
                       <div className="flex items-center space-x-2 mb-2">
                         {evidence.supports_goals ? (
@@ -347,7 +286,7 @@ export default function DocumentAnalysis() {
                   Suggested Lines of Inquiry
                 </h2>
                 <div className="space-y-4">
-                  {analysis.suggested_inquiries.map((inquiry, index) => (
+                  {analysisData.suggested_inquiries.map((inquiry, index) => (
                     <div key={index} className="bg-white p-4 rounded-lg shadow-sm">
                       <h3 className="font-medium text-gray-900">{inquiry.topic}</h3>
                       <p className="text-gray-600 mt-2">{inquiry.rationale}</p>
@@ -371,7 +310,7 @@ export default function DocumentAnalysis() {
                   Potential Weaknesses
                 </h2>
                 <div className="space-y-4">
-                  {analysis.potential_weaknesses.map((weakness, index) => (
+                  {analysisData.potential_weaknesses.map((weakness, index) => (
                     <div key={index} className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-amber-400">
                       <h3 className="font-medium text-gray-900">{weakness.issue}</h3>
                       <p className="text-gray-600 mt-2">{weakness.explanation}</p>

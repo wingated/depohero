@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { AlertTriangle, Lightbulb, ChevronLeft } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 import { analyzeDeposition } from '../lib/openai';
 import type { Deposition, Document, DepositionAnalysis, Case } from '../types';
+import { api } from '../lib/api';
 
 export default function DepositionPage() {
   const { caseId, depositionId } = useParams<{ caseId: string; depositionId: string }>();
@@ -32,64 +32,54 @@ export default function DepositionPage() {
   async function loadDepositionData() {
     if (!depositionId || !caseId || !user?.sub) return;
 
-    // Load case data
-    const { data: caseData, error: caseError } = await supabase
-      .from('cases')
-      .select('*')
-      .eq('id', caseId)
-      .single();
-
-    if (caseError) {
-      console.error('Error loading case:', caseError);
-      setError('Failed to load case data');
-      return;
-    }
-
-    setCaseData(caseData);
-
-    const { data: depoData, error: depoError } = await supabase
-      .from('depositions')
-      .select('*, deposition_analyses(*)')
-      .eq('id', depositionId)
-      .single();
-
-    if (depoError) {
-      console.error('Error loading deposition:', depoError);
-      setError('Failed to load deposition data');
-      return;
-    }
-
-    const { data: docsData, error: docsError } = await supabase
-      .from('documents')
-      .select('*')
-      .eq('case_id', caseId);
-
-    if (docsError) {
-      console.error('Error loading documents:', docsError);
-      setError('Failed to load related documents');
-      return;
-    }
-
-    if (depoData) {
-      setDeposition(depoData);
-      if (depoData.deposition_analyses?.[0]) {
-        setAnalysis(depoData.deposition_analyses[0]);
+    try {
+      // Load case data
+      const caseData = await api.getCase(caseId);
+      if (!caseData) {
+        setError('Failed to load case data');
+        return;
       }
+      setCaseData(caseData);
+
+      // Load deposition data
+      const depoData = await api.getDeposition(depositionId);
+      if (!depoData) {
+        setError('Failed to load deposition data');
+        return;
+      }
+
+      // Load documents
+      const docsData = await api.getDocuments(caseId);
+      if (!docsData) {
+        setError('Failed to load related documents');
+        return;
+      }
+
+      setDeposition(depoData);
+      setDocuments(docsData);
+      
+      // The analysis is already populated in the deposition due to the populate() call in getDeposition
+      if (depoData.analysis) {
+        setAnalysis(depoData.analysis);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      setError('Failed to load data');
     }
-    if (docsData) setDocuments(docsData);
   }
 
   async function handleTranscriptUpdate(newTranscript: string) {
     setTranscript(newTranscript);
     if (!depositionId || !user?.sub) return;
 
-    const { error: updateError } = await supabase
-      .from('depositions')
-      .update({ transcript: newTranscript })
-      .eq('id', depositionId);
-
-    if (updateError) {
-      console.error('Error updating transcript:', updateError);
+    try {
+      // Create a new deposition with updated transcript
+      await api.updateDeposition({
+        id: depositionId,
+        transcript: newTranscript
+      });
+    } catch (error) {
+      console.error('Error updating transcript:', error);
       setError('Failed to save transcript changes');
     }
   }
@@ -153,19 +143,12 @@ export default function DepositionPage() {
 
       const analysisResult = await analyzeDeposition(deposition, transcript, docsWithContent);
 
-      const { error: analysisError } = await supabase
-        .from('deposition_analyses')
-        .upsert({
-          deposition_id: depositionId,
-          discrepancies: analysisResult.discrepancies,
-          suggested_questions: analysisResult.suggested_questions
-        });
-
-      if (analysisError) {
-        console.error('Error saving analysis:', analysisError);
-        setError('Failed to save analysis results');
-        return;
-      }
+      // Create a new deposition analysis
+      await api.createDepositionAnalysis({
+        deposition_id: depositionId,
+        discrepancies: analysisResult.discrepancies,
+        suggested_questions: analysisResult.suggested_questions
+      });
 
       loadDepositionData();
     } catch (error) {
