@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
 import { FileText, Plus, Upload, Trash2, Search, MessageSquare } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
@@ -12,6 +12,7 @@ function sanitizeString(fileName: string): string {
 
 export default function CaseDetail() {
   const { caseId } = useParams<{ caseId: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth0();
   const [caseData, setCaseData] = useState<Case | null>(null);
   const [documents, setDocuments] = useState<Document[]>([]);
@@ -19,7 +20,7 @@ export default function CaseDetail() {
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [isCreatingDepo, setIsCreatingDepo] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'document' | 'deposition'; id: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'document' | 'deposition' | 'case'; id: string } | null>(null);
   const [newDeposition, setNewDeposition] = useState({
     witness_name: '',
     date: new Date().toISOString().split('T')[0]
@@ -155,6 +156,21 @@ export default function CaseDetail() {
       console.error('Error creating deposition:', error);
       setError('Failed to create deposition');
     }
+  }
+
+  async function handleDeleteCase() {
+    if (!caseId || !user?.sub) return;
+    setError(null);
+
+    try {
+      await api.deleteCase(caseId);
+      navigate('/cases');
+    } catch (error) {
+      console.error('Error deleting case:', error);
+      setError('Failed to delete case');
+    }
+
+    setDeleteConfirm(null);
   }
 
   if (!caseData) return null;
@@ -337,6 +353,17 @@ export default function CaseDetail() {
         </div>
       </div>
 
+      {/* Delete Case Button */}
+      <div className="fixed bottom-8 right-8">
+        <button
+          onClick={() => setDeleteConfirm({ type: 'case', id: caseId || '' })}
+          className="flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 shadow-lg"
+        >
+          <Trash2 className="h-5 w-5 mr-2" />
+          Delete Case
+        </button>
+      </div>
+
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -347,7 +374,9 @@ export default function CaseDetail() {
             <p className="text-gray-600 mb-6">
               {deleteConfirm.type === 'document'
                 ? "Are you sure you want to delete this document? This action cannot be undone."
-                : "Are you sure you want to delete this deposition? This will also delete all associated analyses. This action cannot be undone."}
+                : deleteConfirm.type === 'deposition'
+                ? "Are you sure you want to delete this deposition? This will also delete all associated analyses. This action cannot be undone."
+                : "Are you sure you want to delete this case? This will delete all associated documents, depositions, and analyses. This action cannot be undone."}
             </p>
             <div className="flex justify-end space-x-3">
               <button
@@ -360,8 +389,10 @@ export default function CaseDetail() {
                 onClick={() => {
                   if (deleteConfirm.type === 'document') {
                     handleDeleteDocument(deleteConfirm.id);
-                  } else {
+                  } else if (deleteConfirm.type === 'deposition') {
                     handleDeleteDeposition(deleteConfirm.id);
+                  } else {
+                    handleDeleteCase();
                   }
                 }}
                 className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"

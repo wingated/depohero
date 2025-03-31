@@ -62,6 +62,16 @@ app.post('/cases', async (req: Request, res: Response) => {
   }
 });
 
+app.delete('/cases/:id', async (req: Request, res: Response) => {
+  try {
+    await mongoService.deleteCase(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting case:', error);
+    res.status(500).json({ error: 'Failed to delete case' });
+  }
+});
+
 // Documents
 app.get('/documents', async (req: Request, res: Response) => {
   try {
