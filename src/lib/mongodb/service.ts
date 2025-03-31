@@ -1,8 +1,9 @@
-import type { Case, Document, Deposition, DepositionAnalysis, DocumentAnalysis } from '@/types';
+import type { Case, Document, Deposition, DepositionAnalysis, DocumentAnalysis, Chat, ChatMessage } from '@/types';
 import { Case as CaseModel } from './models/Case';
 import { Document as DocumentModel } from './models/Document';
 import { Deposition as DepositionModel, DepositionAnalysis as DepositionAnalysisModel } from './models/Deposition';
 import { DocumentAnalysis as DocumentAnalysisModel } from './models/DocumentAnalysis';
+import { Chat as ChatModel } from './models/Chat';
 import type { Document as MongoDocument } from 'mongoose';
 
 function transformDocument<T>(doc: MongoDocument): T {
@@ -28,8 +29,9 @@ export const mongoService = {
   },
 
   // Document methods
-  async getDocuments(caseId: string): Promise<Document[]> {
-    const documents = await DocumentModel.find({ case_id: caseId }).select('-content');
+  async getDocuments(caseId: string, includeContent: boolean = false): Promise<Document[]> {
+    const documents = await DocumentModel.find({ case_id: caseId })
+      .select(includeContent ? '+content' : '-content');
     return documents.map(doc => transformDocument<Document>(doc));
   },
 
@@ -48,7 +50,7 @@ export const mongoService = {
       case_id: doc.case_id?.toString() || '',
       name: doc.name as string,
       type: doc.type as 'pdf' | 'doc' | 'docx' | 'txt',
-      content: doc.content as Buffer,
+      content: doc.content ? Buffer.from(doc.content) : undefined,
       created_at: doc.createdAt.toISOString()
     };
 
@@ -56,8 +58,7 @@ export const mongoService = {
       id: transformed.id,
       name: transformed.name,
       type: transformed.type,
-      contentLength: transformed.content?.length || 0,
-      content: transformed.content
+      contentLength: transformed.content?.length || 0
     });
 
     return transformed;
@@ -74,12 +75,12 @@ export const mongoService = {
 
   // Deposition methods
   async getDeposition(id: string): Promise<Deposition | null> {
-    const deposition = await DepositionModel.findById(id);
+    const deposition = await DepositionModel.findById(id).populate('analysis');
     return deposition ? transformDocument<Deposition>(deposition) : null;
   },
 
   async getDepositions(caseId: string): Promise<Deposition[]> {
-    const depositions = await DepositionModel.find({ case_id: caseId });
+    const depositions = await DepositionModel.find({ case_id: caseId }).populate('analysis');
     return depositions.map(doc => transformDocument<Deposition>(doc));
   },
 
@@ -113,6 +114,13 @@ export const mongoService = {
 
   async createDepositionAnalysis(data: DepositionAnalysis): Promise<DepositionAnalysis> {
     const newAnalysis = await DepositionAnalysisModel.create(data);
+    
+    // Update the deposition with the new analysis
+    await DepositionModel.findByIdAndUpdate(
+      data.deposition_id,
+      { analysis: newAnalysis._id }
+    );
+    
     return transformDocument<DepositionAnalysis>(newAnalysis);
   },
 
@@ -131,4 +139,31 @@ export const mongoService = {
     const newAnalysis = await DocumentAnalysisModel.create(data);
     return transformDocument<DocumentAnalysis>(newAnalysis);
   },
+
+  // Chat methods
+  async getChats(caseId: string): Promise<Chat[]> {
+    const chats = await ChatModel.find({ case_id: caseId }).sort({ created_at: -1 });
+    return chats.map(doc => transformDocument<Chat>(doc));
+  },
+
+  async getChat(id: string): Promise<Chat | null> {
+    const chat = await ChatModel.findOne({ _id: id });
+    return chat ? transformDocument<Chat>(chat) : null;
+  },
+
+  async createChat(data: Omit<Chat, 'id' | 'created_at'>): Promise<Chat> {
+    const newChat = await ChatModel.create(data);
+    return transformDocument<Chat>(newChat);
+  },
+
+  async addMessageToChat(chatId: string, message: Omit<ChatMessage, 'id' | 'created_at'>): Promise<Chat> {
+    const chat = await ChatModel.findOne({ _id: chatId });
+    if (!chat) {
+      throw new Error('Chat not found');
+    }
+
+    chat.messages.push(message as ChatMessage);
+    await chat.save();
+    return transformDocument<Chat>(chat);
+  }
 }; 

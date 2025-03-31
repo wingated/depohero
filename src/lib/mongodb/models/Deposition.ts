@@ -4,8 +4,8 @@ const discrepancySchema = new mongoose.Schema({
   testimony_excerpt: String,
   document_reference: {
     document_id: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Document'
+      type: String,
+      required: true
     },
     excerpt: String
   },

@@ -1,4 +1,4 @@
-import type { Case, Document, Deposition, DepositionAnalysis, DocumentAnalysis } from '../types';
+import type { Case, Document, Deposition, DepositionAnalysis, DocumentAnalysis, CreateDepositionAnalysis, Chat, ChatMessage } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -24,8 +24,8 @@ export const api = {
   },
 
   // Document endpoints
-  async getDocuments(caseId: string): Promise<Document[]> {
-    const response = await fetch(`${API_URL}/documents?caseId=${caseId}`);
+  async getDocuments(caseId: string, includeContent: boolean = false): Promise<Document[]> {
+    const response = await fetch(`${API_URL}/documents?caseId=${caseId}&includeContent=${includeContent}`);
     return response.json();
   },
 
@@ -107,7 +107,7 @@ export const api = {
     return response.json();
   },
 
-  async createDepositionAnalysis(data: DepositionAnalysis): Promise<DepositionAnalysis> {
+  async createDepositionAnalysis(data: CreateDepositionAnalysis): Promise<DepositionAnalysis> {
     const response = await fetch(`${API_URL}/deposition-analyses`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -135,4 +135,33 @@ export const api = {
     });
     return response.json();
   },
+
+  // Chat endpoints
+  async getChats(caseId: string): Promise<Chat[]> {
+    const response = await fetch(`${API_URL}/chats?caseId=${caseId}`);
+    return response.json();
+  },
+
+  async getChat(id: string): Promise<Chat> {
+    const response = await fetch(`${API_URL}/chats/${id}`);
+    return response.json();
+  },
+
+  async createChat(data: Omit<Chat, 'id' | 'created_at'>): Promise<Chat> {
+    const response = await fetch(`${API_URL}/chats`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  },
+
+  async addMessageToChat(chatId: string, message: Omit<ChatMessage, 'id' | 'created_at'>): Promise<Chat> {
+    const response = await fetch(`${API_URL}/chats/${chatId}/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(message),
+    });
+    return response.json();
+  }
 }; 

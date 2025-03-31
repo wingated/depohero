@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
-import { FileText, Plus, Upload, Trash2, Search } from 'lucide-react';
+import { FileText, Plus, Upload, Trash2, Search, MessageSquare } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { api } from '../lib/api';
 import type { Case, Document, Deposition } from '../types';
@@ -174,7 +174,14 @@ export default function CaseDetail() {
         </div>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex justify-end space-x-4">
+        <Link
+          to={`/cases/${caseId}/chat`}
+          className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+        >
+          <MessageSquare className="h-5 w-5 mr-2" />
+          Chat about Case Documents
+        </Link>
         <Link
           to={`/cases/${caseId}/analyze`}
           className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
@@ -217,15 +224,14 @@ export default function CaseDetail() {
             <div key={doc.id} className="flex items-center justify-between p-4 bg-white rounded-lg shadow">
               <div className="flex items-center">
                 <FileText className="h-6 w-6 text-gray-400 mr-3" />
-                <span className="text-gray-900">{doc.name}</span>
-              </div>
-              <div className="flex items-center space-x-2">
                 <button
                   onClick={() => handleDownloadDocument(doc.id)}
-                  className="text-indigo-600 hover:text-indigo-900"
+                  className="text-gray-900 hover:text-indigo-600"
                 >
-                  Download
+                  {doc.name}
                 </button>
+              </div>
+              <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setDeleteConfirm({ type: 'document', id: doc.id })}
                   className="text-red-600 hover:text-red-900"

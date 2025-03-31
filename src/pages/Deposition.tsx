@@ -58,9 +58,19 @@ export default function DepositionPage() {
       setDeposition(depoData);
       setDocuments(docsData);
       
-      // The analysis is already populated in the deposition due to the populate() call in getDeposition
+      // Load analysis if it exists
       if (depoData.analysis) {
         setAnalysis(depoData.analysis);
+      } else {
+        // Try to fetch analysis directly if not populated
+        try {
+          const analysisData = await api.getDepositionAnalysis(depositionId);
+          if (analysisData) {
+            setAnalysis(analysisData);
+          }
+        } catch (error) {
+          console.error('Error loading analysis:', error);
+        }
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -70,12 +80,12 @@ export default function DepositionPage() {
 
   async function handleTranscriptUpdate(newTranscript: string) {
     setTranscript(newTranscript);
-    if (!depositionId || !user?.sub) return;
+    if (!depositionId || !user?.sub || !deposition) return;
 
     try {
       // Create a new deposition with updated transcript
       await api.updateDeposition({
-        id: depositionId,
+        ...deposition,
         transcript: newTranscript
       });
     } catch (error) {
@@ -84,29 +94,26 @@ export default function DepositionPage() {
     }
   }
 
-  async function downloadDocumentContent(url: string): Promise<string> {
+  async function downloadDocumentContent(documentId: string): Promise<string> {
     try {
-      console.log("Trying to download file:",url);
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      console.log("Trying to download document:", documentId);
+      const blob = await api.downloadDocument(documentId);
       
       // For text files
-      if (url.endsWith('.txt')) {
-        return await response.text();
+      if (blob.type === 'text/plain') {
+        return await blob.text();
       }
       
       // For PDFs, DOCs, and DOCX, we'll need to handle them differently
       // For now, we'll return a placeholder as these formats require additional processing
-      if (url.endsWith('.pdf')) {
+      if (blob.type === 'application/pdf') {
         return 'PDF content extraction not implemented';
       }
-      if (url.endsWith('.doc') || url.endsWith('.docx')) {
+      if (blob.type === 'application/msword' || blob.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
         return 'Word document content extraction not implemented';
       }
       
-      return await response.text();
+      return await blob.text();
     } catch (error) {
       console.error('Error downloading document:', error);
       throw new Error('Failed to download document content');
@@ -123,10 +130,24 @@ export default function DepositionPage() {
     setError(null);
 
     try {
+      // Filter out documents without IDs and log any issues
+      const validDocuments = documents.filter(doc => {
+        if (!doc.id) {
+          console.warn(`Document ${doc.name} has no ID and will be skipped`);
+          return false;
+        }
+        return true;
+      });
+
+      if (validDocuments.length === 0) {
+        setError('No valid documents found to analyze. Please ensure all documents have been properly uploaded.');
+        return;
+      }
+
       const docsWithContent = await Promise.all(
-        documents.map(async (doc) => {
+        validDocuments.map(async (doc) => {
           try {
-            const content = await downloadDocumentContent(doc.url);
+            const content = await downloadDocumentContent(doc.id);
             return {
               content,
               name: doc.name
@@ -144,13 +165,14 @@ export default function DepositionPage() {
       const analysisResult = await analyzeDeposition(deposition, transcript, docsWithContent);
 
       // Create a new deposition analysis
-      await api.createDepositionAnalysis({
-        deposition_id: depositionId,
+      const newAnalysis = await api.createDepositionAnalysis({
+        deposition_id: depositionId!,
         discrepancies: analysisResult.discrepancies,
         suggested_questions: analysisResult.suggested_questions
       });
 
-      loadDepositionData();
+      // Update the analysis state with the new analysis
+      setAnalysis(newAnalysis);
     } catch (error) {
       console.error('Error analyzing deposition:', error);
       setError('Failed to analyze deposition');
@@ -218,7 +240,7 @@ export default function DepositionPage() {
                   Discrepancies
                 </h2>
                 <div className="space-y-4">
-                  {analysis.discrepancies.map((discrepancy, index) => (
+                  {analysis.discrepancies?.map((discrepancy, index) => (
                     <div key={index} className="bg-white p-4 rounded-lg shadow-sm">
                       <div className="space-y-2">
                         <h3 className="font-medium text-gray-900">Testimony:</h3>
@@ -237,6 +259,9 @@ export default function DepositionPage() {
                       </p>
                     </div>
                   ))}
+                  {(!analysis.discrepancies || analysis.discrepancies.length === 0) && (
+                    <p className="text-gray-500 italic">No discrepancies found.</p>
+                  )}
                 </div>
               </div>
 
@@ -246,7 +271,7 @@ export default function DepositionPage() {
                   Suggested Questions
                 </h2>
                 <div className="space-y-2">
-                  {analysis.suggested_questions.map((question, index) => (
+                  {analysis.suggested_questions?.map((question, index) => (
                     <div
                       key={index}
                       className="bg-white p-4 rounded-lg shadow-sm border-l-4 border-yellow-400"
@@ -254,6 +279,9 @@ export default function DepositionPage() {
                       <p className="text-gray-700">{question}</p>
                     </div>
                   ))}
+                  {(!analysis.suggested_questions || analysis.suggested_questions.length === 0) && (
+                    <p className="text-gray-500 italic">No suggested questions available.</p>
+                  )}
                 </div>
               </div>
             </>

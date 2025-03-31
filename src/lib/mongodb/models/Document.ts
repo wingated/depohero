@@ -12,7 +12,7 @@ const documentSchema = new mongoose.Schema({
     required: true
   },
   content: {
-    type: Buffer,
+    type: mongoose.Schema.Types.Buffer,
     required: true,
     select: false // Don't include content by default in queries
   },

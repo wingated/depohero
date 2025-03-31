@@ -4,6 +4,7 @@ import cors from 'cors';
 import multer from 'multer';
 import { connectDB } from '../lib/mongodb/config/db';
 import { mongoService } from '../lib/mongodb/service';
+import { Document as DocumentModel } from '../lib/mongodb/models/Document';
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -65,7 +66,8 @@ app.post('/cases', async (req: Request, res: Response) => {
 app.get('/documents', async (req: Request, res: Response) => {
   try {
     const caseId = req.query.caseId as string;
-    const documents = await mongoService.getDocuments(caseId);
+    const includeContent = req.query.includeContent === 'true';
+    const documents = await mongoService.getDocuments(caseId, includeContent);
     res.json(documents);
   } catch (error) {
     console.error('Error getting documents:', error);
@@ -138,23 +140,32 @@ app.post('/documents/upload', upload.single('file'), async (req: Request, res: R
 // Document download endpoint
 app.get('/documents/:id/download', async (req: Request, res: Response) => {
   try {
-    const document = await mongoService.getDocumentWithContent(req.params.id);
+    const document = await DocumentModel.findById(req.params.id).select('+content');
     if (!document) {
       res.status(404).json({ error: 'Document not found' });
       return;
     }
 
+    const doc = document.toObject();
+    if (!doc.content) {
+      res.status(404).json({ error: 'Document content not found' });
+      return;
+    }
+
+    const buffer = doc.content.buffer as Buffer;
+    const contentLength = buffer.length;
     console.log('Downloading document:', {
-      id: document.id,
-      name: document.name,
-      type: document.type,
-      contentLength: document.content?.length || 0
+      id: doc._id.toString(),
+      name: doc.name,
+      type: doc.type,
+      contentLength
     });
 
-    res.setHeader('Content-Type', `application/${document.type}`);
-    res.setHeader('Content-Disposition', `attachment; filename="${document.name}"`);
-    res.setHeader('Content-Length', document.content?.length.toString() || '0');
-    res.end(document.content);
+    res.setHeader('Content-Type', `application/${doc.type}`);
+    res.setHeader('Content-Disposition', `attachment; filename="${doc.name}"`);
+    res.setHeader('Content-Length', contentLength.toString());
+    res.write(buffer);
+    res.end();
   } catch (error) {
     console.error('Error downloading document:', error);
     res.status(500).json({ error: 'Failed to download document' });
@@ -279,6 +290,52 @@ app.post('/document-analyses', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error creating document analysis:', error);
     res.status(500).json({ error: 'Failed to create document analysis' });
+  }
+});
+
+// Chat endpoints
+app.get('/chats', async (req: Request, res: Response) => {
+  try {
+    const caseId = req.query.caseId as string;
+    const chats = await mongoService.getChats(caseId);
+    res.json(chats);
+  } catch (error) {
+    console.error('Error getting chats:', error);
+    res.status(500).json({ error: 'Failed to get chats' });
+  }
+});
+
+app.get('/chats/:id', async (req: Request, res: Response) => {
+  try {
+    const chat = await mongoService.getChat(req.params.id);
+    if (!chat) {
+      res.status(404).json({ error: 'Chat not found' });
+      return;
+    }
+    res.json(chat);
+  } catch (error) {
+    console.error('Error getting chat:', error);
+    res.status(500).json({ error: 'Failed to get chat' });
+  }
+});
+
+app.post('/chats', async (req: Request, res: Response) => {
+  try {
+    const newChat = await mongoService.createChat(req.body);
+    res.status(201).json(newChat);
+  } catch (error) {
+    console.error('Error creating chat:', error);
+    res.status(500).json({ error: 'Failed to create chat' });
+  }
+});
+
+app.post('/chats/:id/messages', async (req: Request, res: Response) => {
+  try {
+    const chat = await mongoService.addMessageToChat(req.params.id, req.body);
+    res.json(chat);
+  } catch (error) {
+    console.error('Error adding message to chat:', error);
+    res.status(500).json({ error: 'Failed to add message to chat' });
   }
 });
 

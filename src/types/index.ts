@@ -33,6 +33,12 @@ export interface DepositionAnalysis {
   created_at: string;
 }
 
+export interface CreateDepositionAnalysis {
+  deposition_id: string;
+  discrepancies: Discrepancy[];
+  suggested_questions: string[];
+}
+
 export interface Discrepancy {
   testimony_excerpt: string;
   document_reference: {
@@ -62,5 +68,21 @@ export interface DocumentAnalysis {
     explanation: string;
     mitigation_strategy: string;
   }>;
+  created_at: string;
+}
+
+export interface Chat {
+  id: string;
+  case_id: string;
+  title: string;
+  messages: ChatMessage[];
+  file_ids: string[];
+  created_at: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
   created_at: string;
 }

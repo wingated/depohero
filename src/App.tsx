@@ -7,6 +7,7 @@ import Cases from './pages/Cases';
 import CaseDetail from './pages/CaseDetail';
 import Deposition from './pages/Deposition';
 import DocumentAnalysis from './pages/DocumentAnalysis';
+import CaseChat from './pages/CaseChat';
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
             <Route path="cases/:caseId" element={<CaseDetail />} />
             <Route path="cases/:caseId/depositions/:depositionId" element={<Deposition />} />
             <Route path="cases/:caseId/analyze" element={<DocumentAnalysis />} />
+            <Route path="cases/:caseId/chat" element={<CaseChat />} />
           </Route>
         </Routes>
       </BrowserRouter>

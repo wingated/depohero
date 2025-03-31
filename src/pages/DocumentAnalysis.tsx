@@ -25,6 +25,7 @@ export default function DocumentAnalysis() {
   useEffect(() => {
     const loadData = async () => {
       try {
+        console.log("Loading data for caseId:", caseId);
         // Load case data
         const caseData = await api.getCase(caseId);
         if (!caseData) {
@@ -33,19 +34,26 @@ export default function DocumentAnalysis() {
         }
         setCaseData(caseData);
 
-        // Load document data
-        const docData = await api.getDocument(documentId);
-        if (!docData) {
+        // Load a list of documents for the case
+        const documents = await api.getDocuments(caseId);
+        if (!documents) {
           setError('Failed to load document data');
+          return;
+        }
+        //const docData = documents.find(doc => doc.id === documentId);
+        const docData = documents[0];
+
+        if (!docData) {
+          setError('Document not found');
           return;
         }
         setDocumentData(docData);
 
         // Load analysis if it exists
-        const analysisData = await api.getDocumentAnalysis(documentId);
-        if (analysisData) {
-          setAnalysisData(analysisData);
-        }
+        // const analysisData = await api.getDocumentAnalysis(documentId);
+        // if (analysisData) {
+        //   setAnalysisData(analysisData);
+        // }
       } catch (err) {
         console.error('Error loading data:', err);
         setError('Failed to load data');
@@ -53,7 +61,7 @@ export default function DocumentAnalysis() {
     };
 
     loadData();
-  }, [caseId, documentId]);
+  }, [caseId]);
 
   async function loadPreviousAnalyses() {
     if (!caseId) return;
