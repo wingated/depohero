@@ -54,19 +54,6 @@ export const mongoService = {
     return transformDocument<Case>(newCase);
   },
 
-  async deleteCase(id: string): Promise<void> {
-    // Delete all related documents
-    await DocumentModel.deleteMany({ case_id: id });
-    // Delete all related depositions
-    await DepositionModel.deleteMany({ case_id: id });
-    // Delete all related document analyses
-    await DocumentAnalysisModel.deleteMany({ case_id: id });
-    // Delete all related chats
-    await ChatModel.deleteMany({ case_id: id });
-    // Finally delete the case itself
-    await CaseModel.findByIdAndDelete(id);
-  },
-
   // Document methods
   async getDocuments(caseId: string, includeContent: boolean = false): Promise<Document[]> {
     const documents = await DocumentModel.find({ case_id: caseId })

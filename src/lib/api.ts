@@ -14,12 +14,6 @@ export const api = {
     return response.json();
   },
 
-  async deleteCase(id: string): Promise<void> {
-    await fetch(`${API_URL}/cases/${id}`, {
-      method: 'DELETE',
-    });
-  },
-
   async createCase(data: Case): Promise<Case> {
     const response = await fetch(`${API_URL}/cases`, {
       method: 'POST',
