@@ -76,7 +76,7 @@ export interface Chat {
   case_id: string;
   title: string;
   messages: ChatMessage[];
-  file_ids: string[];
+  file_ids?: string[];
   created_at: string;
 }
 
@@ -84,5 +84,6 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  file_ids?: string[];
   created_at: string;
 }

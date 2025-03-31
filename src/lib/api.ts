@@ -156,12 +156,38 @@ export const api = {
     return response.json();
   },
 
-  async addMessageToChat(chatId: string, message: Omit<ChatMessage, 'id' | 'created_at'>): Promise<Chat> {
+  async deleteChat(id: string): Promise<void> {
+    const response = await fetch(`${API_URL}/chats/${id}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) {
+      throw new Error('Failed to delete chat');
+    }
+  },
+
+  async addMessageToChat(chatId: string, message: Omit<ChatMessage, 'id'>): Promise<Chat> {
     const response = await fetch(`${API_URL}/chats/${chatId}/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(message),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(message)
     });
+
+    if (!response.ok) {
+      throw new Error('Failed to add message to chat');
+    }
+
+    return response.json();
+  },
+
+  async getMessages(chatId: string): Promise<ChatMessage[]> {
+    const response = await fetch(`${API_URL}/chats/${chatId}/messages`);
+
+    if (!response.ok) {
+      throw new Error('Failed to get messages');
+    }
+
     return response.json();
   }
 }; 

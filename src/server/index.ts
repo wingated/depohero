@@ -329,6 +329,20 @@ app.post('/chats', async (req: Request, res: Response) => {
   }
 });
 
+app.delete('/chats/:id', async (req: Request, res: Response) => {
+  try {
+    await mongoService.deleteChat(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting chat:', error);
+    if (error instanceof Error && error.message === 'Chat not found') {
+      res.status(404).json({ error: 'Chat not found' });
+    } else {
+      res.status(500).json({ error: 'Failed to delete chat' });
+    }
+  }
+});
+
 app.post('/chats/:id/messages', async (req: Request, res: Response) => {
   try {
     const chat = await mongoService.addMessageToChat(req.params.id, req.body);
@@ -336,6 +350,19 @@ app.post('/chats/:id/messages', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error adding message to chat:', error);
     res.status(500).json({ error: 'Failed to add message to chat' });
+  }
+});
+
+app.get('/chats/:id/messages', async (req: Request, res: Response) => {
+  try {
+    const messages = await mongoService.getMessages(req.params.id);
+    res.json(messages);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Chat not found') {
+      res.status(404).json({ error: 'Chat not found' });
+    } else {
+      res.status(500).json({ error: 'Failed to get messages' });
+    }
   }
 });
 

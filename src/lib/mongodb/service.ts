@@ -4,10 +4,36 @@ import { Document as DocumentModel } from './models/Document';
 import { Deposition as DepositionModel, DepositionAnalysis as DepositionAnalysisModel } from './models/Deposition';
 import { DocumentAnalysis as DocumentAnalysisModel } from './models/DocumentAnalysis';
 import { Chat as ChatModel } from './models/Chat';
-import type { Document as MongoDocument } from 'mongoose';
+import type { Document as MongoDocument, Types } from 'mongoose';
+import { Types as MongooseTypes } from 'mongoose';
 
 function transformDocument<T>(doc: MongoDocument): T {
   const transformed = doc.toJSON();
+  if (transformed._id) {
+    transformed.id = transformed._id.toString();
+    delete transformed._id;
+  }
+  if (transformed.createdAt) {
+    transformed.created_at = transformed.createdAt.toISOString();
+    delete transformed.createdAt;
+  }
+  if (transformed.updatedAt) {
+    delete transformed.updatedAt;
+  }
+  if (transformed.messages) {
+    transformed.messages = transformed.messages.map((msg: any) => {
+      const messageId = typeof msg._id === 'object' && msg._id !== null ? msg._id.toString() : String(Date.now());
+      const messageCreatedAt = msg.createdAt instanceof Date ? msg.createdAt.toISOString() : new Date().toISOString();
+      return {
+        ...msg,
+        id: messageId,
+        created_at: messageCreatedAt,
+        _id: undefined,
+        createdAt: undefined,
+        updatedAt: undefined
+      };
+    });
+  }
   return transformed as T;
 }
 
@@ -156,14 +182,43 @@ export const mongoService = {
     return transformDocument<Chat>(newChat);
   },
 
-  async addMessageToChat(chatId: string, message: Omit<ChatMessage, 'id' | 'created_at'>): Promise<Chat> {
-    const chat = await ChatModel.findOne({ _id: chatId });
+  async deleteChat(id: string): Promise<void> {
+    const result = await ChatModel.deleteOne({ _id: id });
+    if (result.deletedCount === 0) {
+      throw new Error('Chat not found');
+    }
+  },
+
+  async addMessageToChat(chatId: string, message: Omit<ChatMessage, 'id'>): Promise<Chat> {
+    const chat = await ChatModel.findById(chatId);
     if (!chat) {
       throw new Error('Chat not found');
     }
 
-    chat.messages.push(message as ChatMessage);
+    const newMessage: ChatMessage = {
+      ...message,
+      id: new MongooseTypes.ObjectId().toString(),
+      created_at: new Date().toISOString()
+    };
+
+    chat.messages.push(newMessage);
     await chat.save();
+
     return transformDocument<Chat>(chat);
+  },
+
+  async getMessages(chatId: string): Promise<ChatMessage[]> {
+    const chat = await ChatModel.findById(chatId);
+    if (!chat) {
+      throw new Error('Chat not found');
+    }
+
+    return chat.messages.map(msg => ({
+      id: (msg as any)._id.toString(),
+      role: (msg as any).role as 'user' | 'assistant',
+      content: (msg as any).content,
+      file_ids: (msg as any).file_ids,
+      created_at: (msg as any).createdAt.toISOString()
+    }));
   }
 }; 

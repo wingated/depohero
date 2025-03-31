@@ -13,8 +13,11 @@ export default function Layout() {
           <div className="flex justify-between h-16">
             <div className="flex">
               <Link to="/" className="flex items-center">
-                <Scale className="h-8 w-8 text-indigo-600" />
-                <span className="ml-2 text-xl font-semibold">Second Chair.ai</span>
+                <img 
+                  src="/images/logo.png" 
+                  alt="Second Chair.ai" 
+                  className="h-8 w-auto"
+                />
               </Link>
               {isAuthenticated && (
                 <div className="ml-10 flex items-center space-x-4">
