@@ -87,3 +87,19 @@ export interface ChatMessage {
   file_ids?: string[];
   created_at: string;
 }
+
+export interface AudioDeposition {
+  id: string;
+  case_id: string;
+  witness_name: string;
+  date: string;
+  audio_chunks: Array<{
+    data: Buffer;
+    timestamp: string;
+  }>;
+  transcript: string;
+  assembly_ai_id?: string;
+  status: 'recording' | 'completed' | 'error';
+  error_message?: string;
+  created_at: string;
+}

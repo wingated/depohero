@@ -1,4 +1,4 @@
-import type { Case, Document, Deposition, DepositionAnalysis, DocumentAnalysis, CreateDepositionAnalysis, Chat, ChatMessage } from '../types';
+import type { Case, Document, Deposition, DepositionAnalysis, DocumentAnalysis, CreateDepositionAnalysis, Chat, ChatMessage, AudioDeposition } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
@@ -189,5 +189,58 @@ export const api = {
     }
 
     return response.json();
-  }
+  },
+
+  // AudioDeposition endpoints
+  async getAudioDeposition(id: string): Promise<AudioDeposition> {
+    const response = await fetch(`${API_URL}/audio-depositions/${id}`);
+    return response.json();
+  },
+
+  async getAudioDepositions(caseId: string): Promise<AudioDeposition[]> {
+    const response = await fetch(`${API_URL}/audio-depositions?caseId=${caseId}`);
+    return response.json();
+  },
+
+  async createAudioDeposition(data: Omit<AudioDeposition, 'id' | 'created_at'>): Promise<AudioDeposition> {
+    const response = await fetch(`${API_URL}/audio-depositions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  },
+
+  async updateAudioDeposition(id: string, data: Partial<AudioDeposition>): Promise<AudioDeposition> {
+    const response = await fetch(`${API_URL}/audio-depositions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  },
+
+  async appendAudioChunk(id: string, chunk: { data: Buffer; timestamp: Date }): Promise<AudioDeposition> {
+    const response = await fetch(`${API_URL}/audio-depositions/${id}/chunks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(chunk),
+    });
+    return response.json();
+  },
+
+  async updateTranscript(id: string, transcript: string): Promise<AudioDeposition> {
+    const response = await fetch(`${API_URL}/audio-depositions/${id}/transcript`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcript }),
+    });
+    return response.json();
+  },
+
+  async deleteAudioDeposition(id: string): Promise<void> {
+    await fetch(`${API_URL}/audio-depositions/${id}`, {
+      method: 'DELETE',
+    });
+  },
 }; 

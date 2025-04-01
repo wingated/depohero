@@ -8,6 +8,7 @@ import CaseDetail from './pages/CaseDetail';
 import Deposition from './pages/Deposition';
 import DocumentAnalysis from './pages/DocumentAnalysis';
 import CaseChat from './pages/CaseChat';
+import { AudioDepositionPage } from './pages/AudioDepositionPage';
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
             <Route path="cases/:caseId/depositions/:depositionId" element={<Deposition />} />
             <Route path="cases/:caseId/analyze" element={<DocumentAnalysis />} />
             <Route path="cases/:caseId/chat" element={<CaseChat />} />
+            <Route path="cases/:caseId/record-deposition" element={<AudioDepositionPage />} />
           </Route>
         </Routes>
       </BrowserRouter>

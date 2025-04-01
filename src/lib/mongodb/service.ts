@@ -1,9 +1,10 @@
-import type { Case, Document, Deposition, DepositionAnalysis, DocumentAnalysis, Chat, ChatMessage } from '@/types';
+import type { Case, Document, Deposition, DepositionAnalysis, DocumentAnalysis, Chat, ChatMessage, AudioDeposition } from '@/types';
 import { Case as CaseModel } from './models/Case';
 import { Document as DocumentModel } from './models/Document';
 import { Deposition as DepositionModel, DepositionAnalysis as DepositionAnalysisModel } from './models/Deposition';
 import { DocumentAnalysis as DocumentAnalysisModel } from './models/DocumentAnalysis';
 import { Chat as ChatModel } from './models/Chat';
+import { AudioDeposition as AudioDepositionModel } from './models/AudioDeposition';
 import type { Document as MongoDocument, Types } from 'mongoose';
 import { Types as MongooseTypes } from 'mongoose';
 
@@ -220,5 +221,52 @@ export const mongoService = {
       file_ids: (msg as any).file_ids,
       created_at: (msg as any).createdAt.toISOString()
     }));
+  },
+
+  // AudioDeposition methods
+  async getAudioDeposition(id: string): Promise<AudioDeposition | null> {
+    const deposition = await AudioDepositionModel.findById(id);
+    return deposition ? transformDocument<AudioDeposition>(deposition) : null;
+  },
+
+  async getAudioDepositions(caseId: string): Promise<AudioDeposition[]> {
+    const depositions = await AudioDepositionModel.find({ case_id: caseId });
+    return depositions.map(doc => transformDocument<AudioDeposition>(doc));
+  },
+
+  async createAudioDeposition(data: Omit<AudioDeposition, 'id' | 'created_at'>): Promise<AudioDeposition> {
+    const newDeposition = await AudioDepositionModel.create(data);
+    return transformDocument<AudioDeposition>(newDeposition);
+  },
+
+  async updateAudioDeposition(id: string, data: Partial<AudioDeposition>): Promise<AudioDeposition | null> {
+    const updatedDeposition = await AudioDepositionModel.findByIdAndUpdate(
+      id,
+      data,
+      { new: true }
+    );
+    return updatedDeposition ? transformDocument<AudioDeposition>(updatedDeposition) : null;
+  },
+
+  async appendAudioChunk(id: string, chunk: { data: Buffer; timestamp: Date }): Promise<AudioDeposition | null> {
+    const updatedDeposition = await AudioDepositionModel.findByIdAndUpdate(
+      id,
+      { $push: { audio_chunks: chunk } },
+      { new: true }
+    );
+    return updatedDeposition ? transformDocument<AudioDeposition>(updatedDeposition) : null;
+  },
+
+  async updateTranscript(id: string, transcript: string): Promise<AudioDeposition | null> {
+    const updatedDeposition = await AudioDepositionModel.findByIdAndUpdate(
+      id,
+      { transcript },
+      { new: true }
+    );
+    return updatedDeposition ? transformDocument<AudioDeposition>(updatedDeposition) : null;
+  },
+
+  async deleteAudioDeposition(id: string): Promise<void> {
+    await AudioDepositionModel.findByIdAndDelete(id);
   }
 }; 

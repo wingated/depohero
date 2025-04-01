@@ -2,12 +2,15 @@ import express from 'express';
 import type { Request, Response } from 'express';
 import cors from 'cors';
 import multer from 'multer';
+import { createServer } from 'http';
 import { connectDB } from '../lib/mongodb/config/db';
 import { mongoService } from '../lib/mongodb/service';
 import { Document as DocumentModel } from '../lib/mongodb/models/Document';
+import { setupWebSocketServer } from './websocket';
 
 const app = express();
 const port = process.env.PORT || 3001;
+const httpServer = createServer(app);
 
 // Middleware
 app.use(cors());
@@ -23,6 +26,9 @@ const upload = multer({
 
 // Connect to MongoDB
 connectDB();
+
+// Set up WebSocket server
+setupWebSocketServer(httpServer);
 
 // Routes
 
@@ -366,6 +372,95 @@ app.get('/chats/:id/messages', async (req: Request, res: Response) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server is running on port ${port}`);
+// Audio Deposition endpoints
+app.get('/audio-depositions/:id', async (req: Request, res: Response) => {
+  try {
+    const deposition = await mongoService.getAudioDeposition(req.params.id);
+    if (!deposition) {
+      return res.status(404).json({ error: 'Audio deposition not found' });
+    }
+    res.json(deposition);
+  } catch (error) {
+    console.error('Error getting audio deposition:', error);
+    res.status(500).json({ error: 'Failed to get audio deposition' });
+  }
+});
+
+app.get('/audio-depositions', async (req: Request, res: Response) => {
+  try {
+    const caseId = req.query.caseId as string;
+    if (!caseId) {
+      return res.status(400).json({ error: 'caseId is required' });
+    }
+    const depositions = await mongoService.getAudioDepositions(caseId);
+    res.json(depositions);
+  } catch (error) {
+    console.error('Error getting audio depositions:', error);
+    res.status(500).json({ error: 'Failed to get audio depositions' });
+  }
+});
+
+app.post('/audio-depositions', async (req: Request, res: Response) => {
+  try {
+    const deposition = await mongoService.createAudioDeposition(req.body);
+    res.json(deposition);
+  } catch (error) {
+    console.error('Error creating audio deposition:', error);
+    res.status(500).json({ error: 'Failed to create audio deposition' });
+  }
+});
+
+app.patch('/audio-depositions/:id', async (req: Request, res: Response) => {
+  try {
+    const deposition = await mongoService.updateAudioDeposition(req.params.id, req.body);
+    if (!deposition) {
+      return res.status(404).json({ error: 'Audio deposition not found' });
+    }
+    res.json(deposition);
+  } catch (error) {
+    console.error('Error updating audio deposition:', error);
+    res.status(500).json({ error: 'Failed to update audio deposition' });
+  }
+});
+
+app.post('/audio-depositions/:id/chunks', async (req: Request, res: Response) => {
+  try {
+    const deposition = await mongoService.appendAudioChunk(req.params.id, req.body);
+    if (!deposition) {
+      return res.status(404).json({ error: 'Audio deposition not found' });
+    }
+    res.json(deposition);
+  } catch (error) {
+    console.error('Error appending audio chunk:', error);
+    res.status(500).json({ error: 'Failed to append audio chunk' });
+  }
+});
+
+app.put('/audio-depositions/:id/transcript', async (req: Request, res: Response) => {
+  try {
+    const { transcript } = req.body;
+    const deposition = await mongoService.updateTranscript(req.params.id, transcript);
+    if (!deposition) {
+      return res.status(404).json({ error: 'Audio deposition not found' });
+    }
+    res.json(deposition);
+  } catch (error) {
+    console.error('Error updating transcript:', error);
+    res.status(500).json({ error: 'Failed to update transcript' });
+  }
+});
+
+app.delete('/audio-depositions/:id', async (req: Request, res: Response) => {
+  try {
+    await mongoService.deleteAudioDeposition(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error deleting audio deposition:', error);
+    res.status(500).json({ error: 'Failed to delete audio deposition' });
+  }
+});
+
+// Start the server
+httpServer.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 }); 

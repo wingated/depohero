@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
-import { FileText, Plus, Upload, Trash2, Search, MessageSquare } from 'lucide-react';
+import { FileText, Plus, Upload, Trash2, Search, MessageSquare, Mic } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import { api } from '../lib/api';
 import type { Case, Document, Deposition } from '../types';
@@ -188,6 +188,13 @@ export default function CaseDetail() {
         >
           <Search className="h-5 w-5 mr-2" />
           Analyze Documents
+        </Link>
+        <Link
+          to={`/cases/${caseId}/record-deposition`}
+          className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
+        >
+          <Mic className="h-5 w-5 mr-2" />
+          Record Deposition
         </Link>
       </div>
 
