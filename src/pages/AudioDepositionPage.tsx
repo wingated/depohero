@@ -48,19 +48,18 @@ export function AudioDepositionPage() {
       }
 
       // Get microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          channelCount: 1,
-          sampleRate: 16000,
-          sampleSize: 16
-        } 
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const audioContext = new AudioContext({ sampleRate: 16000 });
+  
+      // Load AudioWorklet
+      await audioContext.audioWorklet.addModule("/pcmProcessor.tsx");
+      const source = audioContext.createMediaStreamSource(stream);
+      const pcmProcessor = new AudioWorkletNode(audioContext, "pcm-processor", {
+        processorOptions: { bufferSize: 4000 } // 4000 samples = 16000 * 250ms
       });
-
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=pcm',
-        audioBitsPerSecond: 16000
-      });
-
+      
+      source.connect(pcmProcessor);
+  
       // Set up WebSocket connection
       console.log("Setting up WebSocket connection");
       const ws = new WebSocket(`ws://${window.location.hostname}:3001`);
@@ -90,27 +89,40 @@ export function AudioDepositionPage() {
       };
 
       // Set up audio recording
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          //console.log("Audio chunk received", event.data);
-          audioChunksRef.current.push(event.data);
-          // Convert blob to base64 and send to server
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const base64data = reader.result as string;
-            const bdata = base64data.split(',')[1];
-            //console.log("Sending audio chunk to server", bdata.length);
-            ws.send(JSON.stringify({
-              type: 'audio_chunk',
-              chunk: bdata
-            }));
-          };
-          reader.readAsDataURL(event.data);
-        }
+
+      pcmProcessor.port.onmessage = (event) => {
+        console.log("PCM Data:", event.data.length);
+        let uint8Array = new Uint8Array(event.data);
+        let binaryString = String.fromCharCode(...uint8Array);
+        const base64data = btoa(binaryString);
+        ws.send(JSON.stringify({
+          type: 'audio_chunk',
+          chunk: base64data
+        }));
+
       };
 
-      mediaRecorder.start(250); // Send chunks every 0.25 seconds; AA docs say 100-400ms is best.  read limited at 131073 bytes
-      mediaRecorderRef.current = mediaRecorder;
+    //   mediaRecorder.ondataavailable = (event) => {
+    //     if (event.data.size > 0) {
+    //       //console.log("Audio chunk received", event.data);
+    //       audioChunksRef.current.push(event.data);
+    //       // Convert blob to base64 and send to server
+    //       const reader = new FileReader();
+    //       reader.onloadend = () => {
+    //         const base64data = reader.result as string;
+    //         const bdata = base64data.split(',')[1];
+    //         //console.log("Sending audio chunk to server", bdata.length);
+    //         ws.send(JSON.stringify({
+    //           type: 'audio_chunk',
+    //           chunk: bdata
+    //         }));
+    //       };
+    //       reader.readAsDataURL(event.data);
+    //     }
+    //  };
+
+    //  mediaRecorder.start(250); // Send chunks every 0.25 seconds; AA docs say 100-400ms is best.  read limited at 131073 bytes
+    //  mediaRecorderRef.current = mediaRecorder;
       setIsRecording(true);
     } catch (error) {
       setError('Failed to start recording');

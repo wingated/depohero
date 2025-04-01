@@ -91,7 +91,7 @@ export function setupWebSocketServer(server: Server) {
 
           case 'audio_chunk':
             if (connection) {
-              console.log("Audio chunk received");
+              //console.log("Audio chunk received");
               // Store the audio chunk in the database
               await mongoService.appendAudioChunk(connection.depositionId, {
                 data: Buffer.from(data.chunk, 'base64'),
