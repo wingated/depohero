@@ -267,10 +267,14 @@ export const mongoService = {
   },
 
   async appendTranscript(id: string, newTranscript: string): Promise<AudioDeposition | null> {
+    console.log("Appending transcript to deposition:", id, newTranscript);
+    
     const deposition = await AudioDepositionModel.findById(id);
     if (!deposition) {
       return null;
     }
+
+    //console.log("Deposition found:", deposition);
 
     // Append the new transcript with a space if there's existing content
     const updatedTranscript = deposition.transcript 

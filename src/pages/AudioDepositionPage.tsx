@@ -98,7 +98,7 @@ export function AudioDepositionPage() {
           console.log("Partial transcript:", data.transcript);
 
         } else if (data.type === 'FinalTranscript') {
-            setTranscript(prevTranscript => prevTranscript + data.transcript);
+            setTranscript(prevTranscript => prevTranscript + " " + data.transcript);
 
         } else if (data.type === 'error') {
           setError(data.message);

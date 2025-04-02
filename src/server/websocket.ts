@@ -67,7 +67,9 @@ export function setupWebSocketServer(server: Server) {
                   
                   // Update the transcript in the database
                   // we need to append the transcript to the existing transcript
-                  await mongoService.appendTranscript(connection.depositionId, transcript.text);
+                  if (transcript['message_type'] === 'FinalTranscript') {
+                    await mongoService.appendTranscript(connection.depositionId, transcript.text);
+                  }
 
                   // Send the transcript update to the client
                   connection.ws.send(JSON.stringify({
