@@ -79,12 +79,12 @@ export function setupWebSocketServer(server: Server) {
 
                     // analyze the transcript of the deposition with AI
                     try {
-                      const analysis = await serverSideAI.analyzeDeposition(connection.depositionId);
+                      const json_transcript = await serverSideAI.analyzeDeposition(connection.depositionId);
 
                       // send the analysis to the client
                       connection.ws.send(JSON.stringify({
-                          type: 'analysis',
-                          analysis: analysis
+                          type: 'JSON_Transcript',
+                          json_transcript: json_transcript
                       }));
                     } catch (error) {
                       console.error('Error analyzing deposition:', error);
