@@ -94,8 +94,7 @@ export function AudioDepositionPage() {
         //console.log("Received message from server", event.data);
         const data = JSON.parse(event.data);
         if (data.type === 'PartialTranscript') {
-          //setTranscript(data.transcript);
-          console.log("Partial transcript:", data.transcript);
+          //console.log("Partial transcript:", data.transcript);
 
         } else if (data.type === 'FinalTranscript') {
             setTranscript(prevTranscript => prevTranscript + " " + data.transcript);

@@ -3,6 +3,7 @@ import { Server } from 'http';
 import { mongoService } from '../lib/mongodb/service';
 import { AssemblyAI } from 'assemblyai';
 import { Buffer } from 'buffer';
+import { serverSideAI } from '../lib/ai/service';
 
 const ASSEMBLY_AI_API_KEY = process.env.ASSEMBLY_AI_API_KEY;
 if (!ASSEMBLY_AI_API_KEY) {
@@ -64,18 +65,33 @@ export function setupWebSocketServer(server: Server) {
                 // console.log("Transcript received by the server:", transcript);
 
                 if (connection && transcript.text.length > 0) {
-                  
-                  // Update the transcript in the database
-                  // we need to append the transcript to the existing transcript
-                  if (transcript['message_type'] === 'FinalTranscript') {
-                    await mongoService.appendTranscript(connection.depositionId, transcript.text);
-                  }
 
                   // Send the transcript update to the client
                   connection.ws.send(JSON.stringify({
                     type: transcript['message_type'], // can be 'PartialTranscript' or 'FinalTranscript'
                     transcript: transcript.text
                   }));
+
+                  // Update the transcript in the database
+                  // we need to append the transcript to the existing transcript
+                  if (transcript['message_type'] === 'FinalTranscript') {
+                    await mongoService.appendTranscript(connection.depositionId, transcript.text);
+
+                    // analyze the transcript of the deposition with AI
+                    try {
+                      const analysis = await serverSideAI.analyzeDeposition(connection.depositionId);
+
+                      // send the analysis to the client
+                      connection.ws.send(JSON.stringify({
+                          type: 'analysis',
+                          analysis: analysis
+                      }));
+                    } catch (error) {
+                      console.error('Error analyzing deposition:', error);
+                    } 
+                  }
+
+
 
 
                 }
