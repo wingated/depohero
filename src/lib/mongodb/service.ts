@@ -266,6 +266,23 @@ export const mongoService = {
     return updatedDeposition ? transformDocument<AudioDeposition>(updatedDeposition) : null;
   },
 
+  async appendTranscript(id: string, newTranscript: string): Promise<AudioDeposition | null> {
+    const deposition = await AudioDepositionModel.findById(id);
+    if (!deposition) {
+      return null;
+    }
+
+    // Append the new transcript with a space if there's existing content
+    const updatedTranscript = deposition.transcript 
+      ? `${deposition.transcript} ${newTranscript}`
+      : newTranscript;
+
+    deposition.transcript = updatedTranscript;
+    await deposition.save();
+
+    return transformDocument<AudioDeposition>(deposition);
+  },
+
   async deleteAudioDeposition(id: string): Promise<void> {
     await AudioDepositionModel.findByIdAndDelete(id);
   }

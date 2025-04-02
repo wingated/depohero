@@ -56,7 +56,6 @@ export function setupWebSocketServer(server: Server) {
               // https://www.assemblyai.com/docs/sdk-references/js/streaming
               const assemblyAiStream = await client.realtime.transcriber({
                 sampleRate: 16000,
-                //encoding: 'pcm_s16le',
                 endUtteranceSilenceThreshold: 20000
               });
 
@@ -65,13 +64,18 @@ export function setupWebSocketServer(server: Server) {
                 // console.log("Transcript received by the server:", transcript);
 
                 if (connection && transcript.text.length > 0) {
+                  
                   // Update the transcript in the database
-                  await mongoService.updateTranscript(connection.depositionId, transcript.text);
+                  // we need to append the transcript to the existing transcript
+                  await mongoService.appendTranscript(connection.depositionId, transcript.text);
+
                   // Send the transcript update to the client
                   connection.ws.send(JSON.stringify({
                     type: transcript['message_type'], // can be 'PartialTranscript' or 'FinalTranscript'
                     transcript: transcript.text
                   }));
+
+
                 }
               });
 
