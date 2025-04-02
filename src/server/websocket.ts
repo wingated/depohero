@@ -57,14 +57,16 @@ export function setupWebSocketServer(server: Server) {
                 endUtteranceSilenceThreshold: 20000
               });
 
-              assemblyAiStream.on('transcript', async (transcript: { text: string }) => {
-                console.log("Transcript received by the server: [", transcript.text, "]");
+              assemblyAiStream.on('transcript', async (transcript) => {
+                
+                // console.log("Transcript received by the server:", transcript);
+
                 if (connection && transcript.text.length > 0) {
                   // Update the transcript in the database
                   await mongoService.updateTranscript(connection.depositionId, transcript.text);
                   // Send the transcript update to the client
                   connection.ws.send(JSON.stringify({
-                    type: 'transcript_update',
+                    type: transcript['message_type'], // can be 'PartialTranscript' or 'FinalTranscript'
                     transcript: transcript.text
                   }));
                 }

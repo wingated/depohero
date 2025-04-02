@@ -24,7 +24,6 @@ class PCMProcessor extends AudioWorkletProcessor {
                 for (let j = 0; j < this.bufferSize; j++) {
                     pcm16[j] = Math.max(-32768, Math.min(32767, this.buffer[j] * 32768));
                 }
-                console.log("PCM data", pcm16);
                 this.port.postMessage(pcm16);
                 this.writeIndex = 0; // Reset buffer index
             }

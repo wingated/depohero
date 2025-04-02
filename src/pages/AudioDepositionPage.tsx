@@ -25,14 +25,21 @@ export function AudioDepositionPage() {
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [witnessName, setWitnessName] = useState('');
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const websocketRef = useRef<WebSocket | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const pcmProcessorRef = useRef<AudioWorkletNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
   useEffect(() => {
     return () => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
+      if (pcmProcessorRef.current) {
+        pcmProcessorRef.current.disconnect();
+      }
+      if (sourceNodeRef.current) {
+        sourceNodeRef.current.disconnect();
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
       }
       if (websocketRef.current) {
         websocketRef.current.close();
@@ -50,13 +57,17 @@ export function AudioDepositionPage() {
       // Get microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const audioContext = new AudioContext({ sampleRate: 16000 });
+      audioContextRef.current = audioContext;
   
       // Load AudioWorklet
       await audioContext.audioWorklet.addModule("/pcmProcessor.tsx");
       const source = audioContext.createMediaStreamSource(stream);
+      sourceNodeRef.current = source;
+      
       const pcmProcessor = new AudioWorkletNode(audioContext, "pcm-processor", {
         processorOptions: { bufferSize: 4000 } // 4000 samples = 16000 * 250ms
       });
+      pcmProcessorRef.current = pcmProcessor;
       
       source.connect(pcmProcessor);
   
@@ -74,10 +85,16 @@ export function AudioDepositionPage() {
       };
 
       ws.onmessage = (event) => {
-        console.log("Received message from server", event.data);
+        //console.log("Received message from server", event.data);
         const data = JSON.parse(event.data);
-        if (data.type === 'transcript_update') {
-          setTranscript(data.transcript);
+        if (data.type === 'PartialTranscript') {
+          //setTranscript(data.transcript);
+          console.log("Partial transcript:", data.transcript);
+
+        } else if (data.type === 'FinalTranscript') {
+            // we need to append the transcript to the existing transcript
+            setTranscript(transcript + data.transcript);
+
         } else if (data.type === 'error') {
           setError(data.message);
         }
@@ -88,41 +105,17 @@ export function AudioDepositionPage() {
         console.error('WebSocket error:', error);
       };
 
-      // Set up audio recording
-
       pcmProcessor.port.onmessage = (event) => {
-        console.log("PCM Data:", event.data.length);
-        let uint8Array = new Uint8Array(event.data);
+        let int16Array = new Int16Array(event.data);
+        const uint8Array = new Uint8Array(int16Array.buffer);
         let binaryString = String.fromCharCode(...uint8Array);
         const base64data = btoa(binaryString);
         ws.send(JSON.stringify({
           type: 'audio_chunk',
           chunk: base64data
         }));
-
       };
 
-    //   mediaRecorder.ondataavailable = (event) => {
-    //     if (event.data.size > 0) {
-    //       //console.log("Audio chunk received", event.data);
-    //       audioChunksRef.current.push(event.data);
-    //       // Convert blob to base64 and send to server
-    //       const reader = new FileReader();
-    //       reader.onloadend = () => {
-    //         const base64data = reader.result as string;
-    //         const bdata = base64data.split(',')[1];
-    //         //console.log("Sending audio chunk to server", bdata.length);
-    //         ws.send(JSON.stringify({
-    //           type: 'audio_chunk',
-    //           chunk: bdata
-    //         }));
-    //       };
-    //       reader.readAsDataURL(event.data);
-    //     }
-    //  };
-
-    //  mediaRecorder.start(250); // Send chunks every 0.25 seconds; AA docs say 100-400ms is best.  read limited at 131073 bytes
-    //  mediaRecorderRef.current = mediaRecorder;
       setIsRecording(true);
     } catch (error) {
       setError('Failed to start recording');
@@ -131,15 +124,23 @@ export function AudioDepositionPage() {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-      setIsRecording(false);
+    if (pcmProcessorRef.current) {
+      pcmProcessorRef.current.disconnect();
+      pcmProcessorRef.current = null;
+    }
+    if (sourceNodeRef.current) {
+      sourceNodeRef.current.disconnect();
+      sourceNodeRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    setIsRecording(false);
 
-      if (websocketRef.current) {
-        websocketRef.current.send(JSON.stringify({ type: 'stop_recording' }));
-        websocketRef.current.close();
-      }
+    if (websocketRef.current) {
+      websocketRef.current.send(JSON.stringify({ type: 'stop_recording' }));
+      websocketRef.current.close();
     }
   };
 
