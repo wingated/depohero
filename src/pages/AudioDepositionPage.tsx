@@ -101,6 +101,9 @@ export function AudioDepositionPage() {
 
         } else if (data.type === 'error') {
           setError(data.message);
+          
+        } else {
+          console.log("Unknown message type:", data);
         }
       };
 
