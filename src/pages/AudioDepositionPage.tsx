@@ -25,6 +25,9 @@ export function AudioDepositionPage() {
   const [transcript, setTranscript] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [witnessName, setWitnessName] = useState('');
+  const [depositionConductor, setDepositionConductor] = useState('');
+  const [opposingCounsel, setOpposingCounsel] = useState('');
+  const [depositionGoals, setDepositionGoals] = useState('');
   const websocketRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const pcmProcessorRef = useRef<AudioWorkletNode | null>(null);
@@ -49,8 +52,8 @@ export function AudioDepositionPage() {
 
   const startRecording = async () => {
     try {
-      if (!witnessName) {
-        setError('Please enter the witness name');
+      if (!witnessName || !depositionConductor || !opposingCounsel || !depositionGoals) {
+        setError('Please fill in all required fields');
         return;
       }
 
@@ -80,7 +83,10 @@ export function AudioDepositionPage() {
         ws.send(JSON.stringify({
           type: 'start_recording',
           caseId,
-          witnessName
+          witnessName,
+          depositionConductor,
+          opposingCounsel,
+          depositionGoals
         }));
       };
 
@@ -160,6 +166,48 @@ export function AudioDepositionPage() {
               onChange={(e) => setWitnessName(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Enter witness name"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label htmlFor="depositionConductor" className="block text-sm font-medium text-gray-700 mb-2">
+              Deposition Conductor
+            </label>
+            <input
+              type="text"
+              id="depositionConductor"
+              value={depositionConductor}
+              onChange={(e) => setDepositionConductor(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter name of person conducting the deposition"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label htmlFor="opposingCounsel" className="block text-sm font-medium text-gray-700 mb-2">
+              Opposing Counsel
+            </label>
+            <input
+              type="text"
+              id="opposingCounsel"
+              value={opposingCounsel}
+              onChange={(e) => setOpposingCounsel(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter name of opposing counsel"
+            />
+          </div>
+
+          <div className="mb-4">
+            <label htmlFor="depositionGoals" className="block text-sm font-medium text-gray-700 mb-2">
+              Deposition Goals
+            </label>
+            <textarea
+              id="depositionGoals"
+              value={depositionGoals}
+              onChange={(e) => setDepositionGoals(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Enter the goals of this deposition"
+              rows={3}
             />
           </div>
 

@@ -43,6 +43,9 @@ export function setupWebSocketServer(server: Server) {
               const deposition = await mongoService.createAudioDeposition({
                 case_id: data.caseId,
                 witness_name: data.witnessName,
+                deposition_conductor: data.depositionConductor,
+                opposing_counsel: data.opposingCounsel,
+                deposition_goals: data.depositionGoals,
                 date: new Date().toISOString(),
                 audio_chunks: [],
                 transcript: '',

@@ -22,6 +22,18 @@ const audioDepositionSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  deposition_conductor: {
+    type: String,
+    required: true
+  },
+  opposing_counsel: {
+    type: String,
+    required: true
+  },
+  deposition_goals: {
+    type: String,
+    required: true
+  },
   date: {
     type: Date,
     required: true,

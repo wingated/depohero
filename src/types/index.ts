@@ -92,6 +92,9 @@ export interface AudioDeposition {
   id: string;
   case_id: string;
   witness_name: string;
+  deposition_conductor: string;
+  opposing_counsel: string;
+  deposition_goals: string;
   date: string;
   audio_chunks: Array<{
     data: Buffer;
