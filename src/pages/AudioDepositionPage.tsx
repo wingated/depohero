@@ -262,6 +262,7 @@ export function AudioDepositionPage() {
     setIsRecording(false);
 
     if (websocketRef.current) {
+      console.log("Closing websocket");
       websocketRef.current.send(JSON.stringify({ type: 'stop_recording' }));
       websocketRef.current.close();
     }

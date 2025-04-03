@@ -91,9 +91,6 @@ export function setupWebSocketServer(server: Server) {
                     } 
                   }
 
-
-
-
                 }
               });
 
@@ -153,7 +150,7 @@ export function setupWebSocketServer(server: Server) {
 
               // Remove the connection
               connections.delete(connection.depositionId);
-              //connection = null;
+              connection = null;
 
             } else {
               console.log("No connection found");
